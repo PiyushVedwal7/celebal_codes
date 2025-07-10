@@ -22,7 +22,7 @@ smtp_server = "smtp.gmail.com"
 smtp_port = 587
 smtp_password = "yourpassword"
 
-# Initialize Spark
+
 spark = (
     SparkSession.builder.appName("DeltaIngestionPipeline")
     .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
@@ -85,7 +85,7 @@ def run_pipeline():
     )
     print(f"Version {version} data appended and email sent.")
 
-# Scheduler
+
 schedule.every(interval_minutes).minutes.do(run_pipeline)
 
 if __name__ == "__main__":
