@@ -1,0 +1,92 @@
+
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.window import Window
+
+# Step 1: Load CSV Data from DBFS or mounted storage
+spark = SparkSession.builder.appName("NYC Taxi Analysis").getOrCreate()
+
+# Replace with your actual path in DBFS, Blob, or S3
+data_path = "/mnt/nyc/yellow_tripdata_2020-01.csv"
+df = spark.read.option("header", True).option("inferSchema", True).csv(data_path)
+
+# Optional: Load taxi zones for location info
+zone_path = "/mnt/nyc/taxi+_zone_lookup.csv"
+zones = spark.read.option("header", True).csv(zone_path)
+
+# Cache for performance
+df.cache()
+
+# Step 2: Add Revenue Column (Query 1)
+df = df.withColumn(
+    "Revenue",
+    col("fare_amount") + col("extra") + col("mta_tax") + col("improvement_surcharge") +
+    col("tip_amount") + col("tolls_amount") + col("total_amount")
+)
+
+# Step 3: Query 2 - Passenger Count by Borough (area)
+passenger_by_area = df.join(zones, df["PULocationID"] == zones["LocationID"]) \
+    .groupBy("Borough") \
+    .agg(sum("passenger_count").alias("total_passengers")) \
+    .orderBy(desc("total_passengers"))
+
+print("Query 2: Passenger Count by Borough")
+passenger_by_area.show(truncate=False)
+
+# Step 4: Query 3 - Avg Fare & Avg Revenue by Vendor
+vendor_avg = df.groupBy("VendorID").agg(
+    avg("fare_amount").alias("avg_fare"),
+    avg("Revenue").alias("avg_revenue")
+)
+
+print("Query 3: Average Fare and Revenue by Vendor")
+vendor_avg.show()
+
+# Step 5: Query 4 - Moving Count of Payments by Payment Mode
+window_spec = Window.partitionBy("payment_type").orderBy("tpep_pickup_datetime").rowsBetween(-10, 0)
+moving_payment_count = df.withColumn("moving_payment_count", count("payment_type").over(window_spec))
+
+print("Query 4: Moving Count of Payments")
+moving_payment_count.select("tpep_pickup_datetime", "payment_type", "moving_payment_count").show(10)
+
+# Step 6: Query 5 - Top 2 Vendors by Revenue on a Specific Date
+df = df.withColumn("trip_date", to_date("tpep_pickup_datetime"))
+
+top_vendors = df.filter(col("trip_date") == "2020-01-15") \
+    .groupBy("VendorID") \
+    .agg(
+        sum("Revenue").alias("total_revenue"),
+        sum("passenger_count").alias("total_passengers"),
+        sum("trip_distance").alias("total_distance")
+    )
+
+top_2 = top_vendors.withColumn("rank", row_number().over(Window.orderBy(desc("total_revenue")))) \
+    .filter(col("rank") <= 2)
+
+print("Query 5: Top 2 Vendors by Revenue on 2020-01-15")
+top_2.select("VendorID", "total_revenue", "total_passengers", "total_distance").show()
+
+# Step 7: Query 6 - Route with Most Passengers
+popular_route = df.groupBy("PULocationID", "DOLocationID") \
+    .agg(sum("passenger_count").alias("total_passengers")) \
+    .orderBy(desc("total_passengers"))
+
+print("Query 6: Route with Most Passengers")
+popular_route.show(1)
+
+# Step 8: Query 7 - Top Pickup Locations in Last 5/10 Seconds (Simulated)
+df = df.withColumn("pickup_unix", unix_timestamp("tpep_pickup_datetime"))
+latest_time = df.selectExpr("max(pickup_unix)").first()[0]
+threshold = latest_time - 10
+
+recent_pickups = df.filter(col("pickup_unix") >= threshold) \
+    .groupBy("PULocationID") \
+    .agg(sum("passenger_count").alias("total_passengers")) \
+    .orderBy(desc("total_passengers"))
+
+print("Query 7: Top Pickup Locations in Last 10 Seconds")
+recent_pickups.show()
+
+
+
