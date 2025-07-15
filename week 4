@@ -1,0 +1,75 @@
+Query 1: Cities with vowels at both ends
+
+SELECT DISTINCT CITY
+FROM STATION
+WHERE LOWER(SUBSTR(CITY, 1, 1)) IN ('a', 'e', 'i', 'o', 'u')
+AND LOWER(SUBSTR(CITY, -1, 1)) IN ('a', 'e', 'i', 'o', 'u');
+
+
+Query 2: Difference between max and min population
+
+SELECT MAX(POPULATION) - MIN(POPULATION) AS population_diff
+FROM CITY;
+
+
+Query 3: Euclidean Distance Between Extreme Coordinates
+
+SELECT ROUND(
+    SQRT(POWER(MAX(LAT_N) - MIN(LAT_N), 2) + POWER(MAX(LONG_W) - MIN(LONG_W), 2)), 4
+) AS euclidean_distance
+FROM STATION;
+
+
+Query 4: Median of LAT_N (rounded to 4 decimals)
+
+SELECT ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY LAT_N), 4) AS median_lat
+FROM STATION;
+
+
+Query 5: Cities where CONTINENT is 'Africa'
+
+SELECT CITY.Name
+FROM CITY
+JOIN COUNTRY ON CITY.CountryCode = COUNTRY.Code
+WHERE COUNTRY.CONTINENT = 'Africa';
+
+
+ Query 6: Wands – Minimum coins needed per age & power
+
+SELECT w.id, wp.age, w.coins_needed, w.power
+FROM Wands w
+JOIN Wands_Property wp ON w.code = wp.code
+WHERE wp.is_evil = 0
+  AND w.coins_needed = (
+    SELECT MIN(w1.coins_needed)
+    FROM Wands w1
+    JOIN Wands_Property wp1 ON w1.code = wp1.code
+    WHERE w1.power = w.power AND wp1.age = wp.age AND wp1.is_evil = 0
+)
+ORDER BY w.power DESC, wp.age DESC;
+
+
+
+
+ Query 7: Hacker total scores – max per challenge
+
+SELECT h.hacker_id, h.name, SUM(max_scores.max_score) AS total_score
+FROM Hackers h
+JOIN (
+    SELECT hacker_id, challenge_id, MAX(score) AS max_score
+    FROM Submissions
+    GROUP BY hacker_id, challenge_id
+) AS max_scores ON h.hacker_id = max_scores.hacker_id
+GROUP BY h.hacker_id, h.name
+HAVING SUM(max_scores.max_score) > 0
+ORDER BY total_score DESC, h.hacker_id ASC;
+
+
+
+
+
+
+
+
+
+
